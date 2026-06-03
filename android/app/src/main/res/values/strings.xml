@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Ajanda</string>
+    <string name="title_activity_main">Ajanda</string>
+    <string name="package_name">com.ajanda.premium</string>
+    <string name="custom_url_scheme">com.ajanda.premium</string>
+</resources>

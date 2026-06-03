@@ -1,0 +1,50 @@
+# Ortam değişkenleri — ASLA git'e ekleme!
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# IDE / Editör
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+
+# Claude Code yerel ayarları
+.claude/
+
+# Capacitor — `cap sync` ile üretilen dosyalar (yeniden üretilebilir)
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/capacitor.settings.gradle
+android/capacitor.build.gradle
+android/capacitor-cordova-android-plugins/
+.capacitor/
+
+# Android imzalama anahtarları — ASLA commit etme!
+*.keystore
+*.jks
+keystore.properties
+android/app/release/
+
+# Derlenmiş çıktılar
+*.apk
+*.aab
+
+# Logs
+logs/
+*.log

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Uygulama koyu tema renkleri -->
+    <color name="colorPrimary">#0d0d14</color>
+    <color name="colorPrimaryDark">#0d0d14</color>
+    <color name="colorAccent">#7c6ef4</color>
+
+    <!-- Splash screen arka planı -->
+    <color name="splashBackground">#0d0d14</color>
+</resources>

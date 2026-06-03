@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0a0a12">
+    <title>Agenda | Premium Workspace</title>
+    
+    <!-- Fonts: Outfit for a modern geometric look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Icons: Phosphor Icons (Sleek, modern) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <nav class="app-nav">
+        <div class="nav-brand"><i class="ph ph-calendar-check"></i> Premium Ajanda</div>
+        <div class="nav-links">
+            <button class="nav-tab active" data-target="tasks-view"><i class="ph ph-check-square"></i> Görevler</button>
+            <button class="nav-tab" data-target="notes-view"><i class="ph ph-notebook"></i> Notlar</button>
+        </div>
+        <div class="nav-actions">
+            <button class="nav-icon-btn" id="open-history-btn" title="Geçmiş Görevler" aria-label="Geçmiş Görevler">
+                <i class="ph ph-clock-counter-clockwise"></i>
+            </button>
+            <button class="nav-icon-btn" id="open-settings-btn" title="Ayarlar" aria-label="Ayarlar">
+                <i class="ph ph-gear-six"></i>
+            </button>
+        </div>
+    </nav>
+
+    <div class="app-container">
+        <!-- Main Bento Grid Wrapper (Tasks View) -->
+        <div id="tasks-view" class="app-view active">
+            <main class="bento-grid">
+            
+            <!-- Widget 1: Header & Greeting -->
+            <header class="bento-card widget-greeting">
+                <div class="greeting-content">
+                    <h1 id="greeting-text">Günaydın, Taha.</h1>
+                    <p class="subtitle">Bugün harika işler başaracaksın.</p>
+                </div>
+                <div class="time-display" id="time-display">00:00</div>
+                <!-- Mobilde tarih + istatistik özeti (masaüstünde gizli) -->
+                <div class="mobile-greeting-meta">
+                    <span class="mgm-date" id="mgm-date">18 Mayıs · Pazartesi</span>
+                    <div class="mgm-stats">
+                        <i class="ph ph-target"></i>
+                        <span id="mgm-tasks-left">0</span> kaldı
+                        <div class="mgm-progress">
+                            <div class="mgm-fill" id="mgm-fill"></div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Widget 2: Date & Mini Calendar -->
+            <aside class="bento-card widget-date">
+                <div class="date-header">
+                    <span class="month" id="current-month">Mayıs</span>
+                    <span class="year" id="current-year">2026</span>
+                </div>
+                <div class="day-large" id="current-day">01</div>
+                <div class="day-name" id="current-day-name">Cuma</div>
+            </aside>
+
+            <!-- Widget 3: Stats -->
+            <section class="bento-card widget-stats">
+                <div class="stat-icon"><i class="ph ph-check-circle"></i></div>
+                <div class="stat-details">
+                    <h3 id="tasks-left-count">0</h3>
+                    <p>Tamamlanacak Görev</p>
+                </div>
+                <!-- Progress ring could go here -->
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="task-progress"></div>
+                </div>
+            </section>
+
+            <!-- Widget 4: Add Task Trigger -->
+            <section class="bento-card widget-add-task widget-add-trigger" id="open-modal-btn">
+                <div class="add-trigger-content">
+                    <div class="add-icon-wrapper">
+                        <i class="ph ph-plus"></i>
+                    </div>
+                    <div>
+                        <h3>Yeni Görev Ekle</h3>
+                        <p>Detaylı planlama için tıkla</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Widget 5: Task List (Main Content) -->
+            <section class="bento-card widget-task-list">
+                <div class="list-header">
+                    <div class="view-tabs">
+                        <button class="view-tab active" data-view="list">Liste</button>
+                        <button class="view-tab" data-view="weekly">Haftalık</button>
+                    </div>
+                    <div class="filter-group">
+                        <button class="filter-btn active" data-filter="all">Tümü</button>
+                        <button class="filter-btn" data-filter="active">Aktif</button>
+                        <button class="filter-btn" data-filter="completed">Bitenler</button>
+                    </div>
+                </div>
+                <div class="search-sort-bar">
+                    <div class="search-input-wrapper">
+                        <i class="ph ph-magnifying-glass"></i>
+                        <input type="text" id="task-search" placeholder="Görev ara..." autocomplete="off">
+                        <button type="button" class="clear-search-btn d-none" id="clear-search-btn" aria-label="Aramayı Temizle">
+                            <i class="ph ph-x"></i>
+                        </button>
+                    </div>
+                    <select id="sort-select" class="sort-select" aria-label="Sıralama">
+                        <option value="default">Sırala</option>
+                        <option value="date-asc">Tarih ↑</option>
+                        <option value="date-desc">Tarih ↓</option>
+                        <option value="priority">Öncelik</option>
+                        <option value="name">Ada Göre</option>
+                    </select>
+                </div>
+                <div class="view-content active-view" id="tasks-container">
+                    <!-- Tasks will be injected here via JS -->
+                    <div class="empty-state" id="empty-state">
+                        <i class="ph-duotone ph-coffee"></i>
+                        <p>Şu an için hiç görevin yok. Rahatına bak!</p>
+                    </div>
+                </div>
+                
+                <div class="view-content d-none" id="weekly-container">
+                    <div class="weekly-controls">
+                        <div class="weekly-nav">
+                            <button class="icon-btn" id="prev-week-btn" aria-label="Önceki Hafta"><i class="ph ph-caret-left"></i></button>
+                            <h3 id="weekly-range-label">Haftalık Görünüm</h3>
+                            <button class="icon-btn" id="next-week-btn" aria-label="Sonraki Hafta"><i class="ph ph-caret-right"></i></button>
+                        </div>
+                        <button class="btn-secondary btn-sm" id="today-week-btn">Bu Hafta</button>
+                    </div>
+                    <div id="weekly-grid-container" class="weekly-grid-wrapper">
+                        <!-- Weekly Grid will be injected here -->
+                    </div>
+                </div>
+            </section>
+
+            </main>
+        </div> <!-- End tasks-view -->
+
+        <!-- Notes View -->
+        <div id="notes-view" class="app-view d-none">
+            <div class="notes-header-section">
+                <h2>Notlarım</h2>
+                <button class="btn-primary" id="open-note-type-btn">
+                    <i class="ph ph-plus"></i> Yeni Not Ekle
+                </button>
+            </div>
+            <div class="notes-grid" id="notes-container">
+                <!-- Notes injected via JS -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Task Modal Overlay -->
+    <div class="modal-overlay d-none" id="task-modal">
+        <div class="modal-box bento-card">
+            <div class="modal-header">
+                <h2 id="modal-title">Yeni Görev Tanımla</h2>
+                <button class="close-modal-btn" id="close-modal-btn" aria-label="Kapat">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <form id="modal-task-form" class="modal-form">
+                <div class="form-group">
+                    <label for="modal-task-title">Görev Başlığı</label>
+                    <input type="text" id="modal-task-title" placeholder="Örn: Haftalık toplantı raporu" autocomplete="off" required>
+                </div>
+                <div class="form-group">
+                    <label for="modal-task-desc">Açıklama <span class="optional">(İsteğe bağlı)</span></label>
+                    <textarea id="modal-task-desc" placeholder="Görevin detaylarını buraya yazabilirsiniz..." rows="3"></textarea>
+                </div>
+                <div class="form-group priority-group">
+                    <label>Aciliyet (Öncelik)</label>
+                    <div class="priority-options">
+                        <label class="priority-radio low">
+                            <input type="radio" name="task-priority" value="low">
+                            <span class="radio-custom">Düşük</span>
+                        </label>
+                        <label class="priority-radio medium">
+                            <input type="radio" name="task-priority" value="medium" checked>
+                            <span class="radio-custom">Orta</span>
+                        </label>
+                        <label class="priority-radio high">
+                            <input type="radio" name="task-priority" value="high">
+                            <span class="radio-custom">Yüksek</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-group category-group">
+                    <label>Kategori <span class="optional">(İsteğe bağlı)</span></label>
+                    <div class="category-options">
+                        <label class="category-radio none">
+                            <input type="radio" name="task-category" value="" checked>
+                            <span class="radio-custom">Yok</span>
+                        </label>
+                        <label class="category-radio work">
+                            <input type="radio" name="task-category" value="work">
+                            <span class="radio-custom">İş</span>
+                        </label>
+                        <label class="category-radio personal">
+                            <input type="radio" name="task-category" value="personal">
+                            <span class="radio-custom">Kişisel</span>
+                        </label>
+                        <label class="category-radio school">
+                            <input type="radio" name="task-category" value="school">
+                            <span class="radio-custom">Okul</span>
+                        </label>
+                        <label class="category-radio health">
+                            <input type="radio" name="task-category" value="health">
+                            <span class="radio-custom">Sağlık</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group half">
+                        <label for="modal-task-date">Tarih</label>
+                        <div class="input-with-icon">
+                            <i class="ph ph-calendar-blank"></i>
+                            <input type="date" id="modal-task-date">
+                        </div>
+                    </div>
+                    <div class="form-group half">
+                        <label for="modal-task-time">Saat</label>
+                        <div class="input-with-icon">
+                            <i class="ph ph-clock"></i>
+                            <input type="time" id="modal-task-time">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="modal-task-reminder">Hatırlatıcı <span class="optional">(Tarih ve saat gerekli)</span></label>
+                    <div class="input-with-icon select-wrap">
+                        <i class="ph ph-bell-ringing"></i>
+                        <select id="modal-task-reminder">
+                            <option value="">Hatırlatma yok</option>
+                            <option value="0">Tam zamanında</option>
+                            <option value="5">5 dakika önce</option>
+                            <option value="10">10 dakika önce</option>
+                            <option value="15">15 dakika önce</option>
+                            <option value="30">30 dakika önce</option>
+                            <option value="60">1 saat önce</option>
+                            <option value="120">2 saat önce</option>
+                            <option value="180">3 saat önce</option>
+                            <option value="1440">1 gün önce</option>
+                        </select>
+                        <i class="ph ph-caret-down select-caret"></i>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" id="cancel-modal-btn">İptal</button>
+                    <button type="submit" class="btn-primary">
+                        <i class="ph ph-check"></i>
+                        <span>Kaydet</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Task Details Overlay -->
+    <div class="modal-overlay d-none" id="task-details-modal">
+        <div class="modal-box bento-card">
+            <div class="modal-header">
+                <h2>Görev Detayları</h2>
+                <button class="close-modal-btn" id="close-details-btn" aria-label="Kapat">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="details-content">
+                <div class="details-header-row">
+                    <h3 id="details-title">Görev Başlığı</h3>
+                    <span class="priority-badge" id="details-priority">Orta</span>
+                </div>
+                <div class="details-meta">
+                    <div class="meta-item">
+                        <i class="ph ph-calendar-blank"></i>
+                        <span id="details-date">-</span>
+                    </div>
+                    <div class="meta-item">
+                        <i class="ph ph-clock"></i>
+                        <span id="details-time">-</span>
+                    </div>
+                    <div class="meta-item d-none" id="details-category-row">
+                        <i class="ph ph-tag"></i>
+                        <span id="details-category">-</span>
+                    </div>
+                    <div class="meta-item d-none" id="details-reminder-row">
+                        <i class="ph ph-bell-ringing"></i>
+                        <span id="details-reminder">-</span>
+                    </div>
+                </div>
+                <div class="details-desc-box">
+                    <p id="details-desc">Açıklama bulunmuyor.</p>
+                </div>
+                <div class="modal-actions" style="justify-content: space-between;">
+                    <button class="btn-danger" id="details-delete-btn">
+                        <i class="ph ph-trash"></i> Sil
+                    </button>
+                    <button class="btn-primary" id="details-edit-btn">
+                        <i class="ph ph-pencil-simple"></i>
+                        <span>Düzenle</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note Type Selection Modal -->
+    <div class="modal-overlay d-none" id="note-type-modal">
+        <div class="modal-box bento-card modal-sm" style="max-width: 400px; text-align: center;">
+            <div class="modal-header" style="justify-content: center; border-bottom: none; margin-bottom: 10px;">
+                <h2 style="font-size: 1.5rem;">Ne tür bir not?</h2>
+                <button class="close-modal-btn" id="close-note-type-btn" style="position: absolute; right: 24px;">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="note-type-options" style="display: flex; gap: 16px; margin-bottom: 20px;">
+                <button class="type-option-btn" data-type="text">
+                    <i class="ph ph-text-align-left" style="font-size: 2rem; color: var(--accent-solid); margin-bottom: 8px;"></i>
+                    <span style="font-weight: 600; display: block; margin-bottom: 4px;">Serbest Metin</span>
+                    <small style="color: var(--text-secondary); font-size: 0.8rem;">Uzun yazılar ve fikirler</small>
+                </button>
+                <button class="type-option-btn" data-type="list">
+                    <i class="ph ph-list-checks" style="font-size: 2rem; color: var(--priority-medium); margin-bottom: 8px;"></i>
+                    <span style="font-weight: 600; display: block; margin-bottom: 4px;">Liste</span>
+                    <small style="color: var(--text-secondary); font-size: 0.8rem;">Alışveriş, kontrol listeleri</small>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Note Form Modal -->
+    <div class="modal-overlay d-none" id="note-form-modal">
+        <div class="modal-box bento-card">
+            <div class="modal-header">
+                <h2 id="note-modal-title">Yeni Not</h2>
+                <button class="close-modal-btn" id="close-note-form-btn">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <form id="modal-note-form" class="modal-form">
+                <input type="hidden" id="note-type-input" value="text">
+                <div class="form-group">
+                    <label for="note-title">Not Başlığı</label>
+                    <input type="text" id="note-title" placeholder="Örn: Toplantı Notları..." required autocomplete="off">
+                </div>
+                
+                <!-- Text Area -->
+                <div class="form-group" id="note-text-area">
+                    <label for="note-content-text">İçerik</label>
+                    <textarea id="note-content-text" rows="8" placeholder="Fikirlerinizi buraya dökün..."></textarea>
+                </div>
+                
+                <!-- List Area -->
+                <div class="form-group d-none" id="note-list-area">
+                    <label>Liste Öğeleri</label>
+                    <div id="note-list-items" style="display:flex; flex-direction:column; gap:8px;">
+                        <!-- JS injects inputs here -->
+                    </div>
+                    <button type="button" class="btn-secondary btn-sm" id="add-list-item-btn" style="margin-top: 12px; width: fit-content;">
+                        <i class="ph ph-plus"></i> Satır Ekle
+                    </button>
+                </div>
+                
+                <div class="modal-actions" style="justify-content: space-between;">
+                    <button type="button" class="btn-danger d-none" id="note-delete-btn"><i class="ph ph-trash"></i> Sil</button>
+                    <div style="display:flex; gap:8px; margin-left: auto;">
+                        <button type="button" class="btn-secondary" id="cancel-note-form-btn">İptal</button>
+                        <button type="submit" class="btn-primary">
+                            <i class="ph ph-check"></i>
+                            <span>Kaydet</span>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Ayarlar — Tam Ekran -->
+    <div class="fullscreen-page" id="settings-modal">
+        <div class="fs-header">
+            <button class="fs-back-btn" id="close-settings-btn" aria-label="Geri">
+                <i class="ph ph-arrow-left"></i>
+            </button>
+            <h2 class="fs-title">Ayarlar</h2>
+        </div>
+        <div class="fs-body">
+            <div class="settings-content">
+                <div class="settings-group" id="settings-ai-group">
+                    <div class="settings-group-title">
+                        <i class="ph ph-robot"></i> Yapay Zekâ Asistanı
+                    </div>
+                    <div class="ai-key-status warn" id="settings-key-status"></div>
+                    <input type="password" id="settings-key-input" class="ai-settings-input"
+                        placeholder="sk-or-v1-..." autocomplete="off">
+                    <div class="settings-btn-row">
+                        <button class="ai-settings-btn primary" id="settings-key-save">
+                            <i class="ph ph-floppy-disk"></i> Kaydet
+                        </button>
+                        <button class="ai-settings-btn" id="settings-key-default">
+                            <i class="ph ph-sparkle"></i> Varsayılan
+                        </button>
+                    </div>
+                    <button class="ai-settings-btn danger full" id="settings-key-remove">
+                        <i class="ph ph-trash"></i> Anahtarı Sil
+                    </button>
+                    <p class="settings-hint">
+                        Ücretsiz anahtarını
+                        <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a>
+                        adresinden alabilirsin. Anahtar yalnızca bu cihazda saklanır.
+                    </p>
+                </div>
+                <div class="settings-group" id="settings-ai-web-note">
+                    <div class="settings-group-title">
+                        <i class="ph ph-robot"></i> Yapay Zekâ Asistanı
+                    </div>
+                    <p class="settings-hint">Web sürümünde asistan sunucu üzerinden otomatik çalışır.</p>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-group-title">
+                        <i class="ph ph-info"></i> Uygulama
+                    </div>
+                    <div class="settings-row">
+                        <span>Sürüm</span>
+                        <span class="settings-val">1.0.0</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Geçmiş Görevler — Tam Ekran -->
+    <div class="fullscreen-page" id="history-modal">
+        <div class="fs-header">
+            <button class="fs-back-btn" id="close-history-btn" aria-label="Geri">
+                <i class="ph ph-arrow-left"></i>
+            </button>
+            <h2 class="fs-title">Geçmiş Görevler</h2>
+        </div>
+        <div class="fs-body">
+            <div class="history-content">
+                <p class="history-info">
+                    <i class="ph ph-check-circle"></i>
+                    Tamamlandıktan sonra silinen görevlerin kaydı.
+                </p>
+                <div class="history-filter">
+                    <div class="hf-field">
+                        <label for="history-from">Başlangıç</label>
+                        <input type="date" id="history-from">
+                    </div>
+                    <div class="hf-field">
+                        <label for="history-to">Bitiş</label>
+                        <input type="date" id="history-to">
+                    </div>
+                    <button class="hf-clear" id="history-clear-filter" title="Filtreyi temizle">
+                        <i class="ph ph-x"></i>
+                    </button>
+                </div>
+                <div class="history-list" id="history-list"></div>
+                <button class="ai-settings-btn danger full" id="history-clear-all">
+                    <i class="ph ph-trash"></i> Tüm Geçmişi Sil
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================
+         Mobile Bottom Navigation Bar
+         ========================================== -->
+    <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Ana Navigasyon">
+        <button class="mbn-item active" data-mbn="tasks" aria-label="Görevler">
+            <i class="ph ph-check-square"></i>
+            <span>Görevler</span>
+        </button>
+        <button class="mbn-item" data-mbn="notes" aria-label="Notlar">
+            <i class="ph ph-notebook"></i>
+            <span>Notlar</span>
+        </button>
+        <button class="mbn-fab" id="mbn-fab" aria-label="Yeni Görev Ekle">
+            <i class="ph ph-plus"></i>
+        </button>
+        <button class="mbn-item" data-mbn="ai" aria-label="AI Asistan">
+            <i class="ph ph-robot"></i>
+            <span>Asistan</span>
+        </button>
+    </nav>
+
+    <!-- ==========================================
+         AI Chat Panel
+         ========================================== -->
+
+    <!-- Floating Toggle Button -->
+    <button class="ai-chat-toggle" id="ai-chat-toggle" aria-label="AI Asistan aç">
+        <i class="ph ph-robot"></i>
+        <span class="ai-toggle-label">Asistan</span>
+    </button>
+
+    <!-- Chat Panel -->
+    <div class="ai-chat-panel" id="ai-chat-panel" aria-label="Ajanda Asistanı">
+
+        <!-- Header -->
+        <div class="ai-chat-header">
+            <div class="ai-header-left">
+                <div class="ai-avatar"><i class="ph ph-robot"></i></div>
+                <div class="ai-header-info">
+                    <h3>Ajanda Asistanı</h3>
+                    <span class="ai-model-label">GPT-4o mini · OpenRouter</span>
+                </div>
+            </div>
+            <div class="ai-header-actions">
+                <button class="ai-icon-btn" id="ai-history-btn" title="Sohbet geçmişi">
+                    <i class="ph ph-clock-counter-clockwise"></i>
+                </button>
+                <button class="ai-icon-btn" id="ai-clear-btn" title="Yeni sohbet">
+                    <i class="ph ph-note-pencil"></i>
+                </button>
+                <button class="ai-icon-btn" id="ai-chat-close" title="Kapat">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        <div class="ai-chat-messages" id="ai-chat-messages"></div>
+
+        <!-- Input Footer -->
+        <div class="ai-chat-footer">
+            <textarea
+                id="ai-chat-input"
+                placeholder="Bir görev ekle, güncelle, listele..."
+                rows="1"
+                maxlength="1000"
+                aria-label="Mesaj yaz"
+            ></textarea>
+            <button class="ai-send-btn" id="ai-send-btn" aria-label="Gönder">
+                <i class="ph ph-paper-plane-tilt"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Undo Toast -->
+    <div class="undo-toast d-none" id="undo-toast">
+        <i class="ph ph-check-circle" style="color: var(--success);"></i>
+        <span id="undo-toast-msg">Görev silindi.</span>
+        <button class="undo-btn" id="undo-btn">
+            <i class="ph ph-arrow-counter-clockwise"></i> Geri Al
+        </button>
+    </div>
+
+    <!-- Custom JS -->
+    <script src="js/app.js"></script>
+    <script src="js/ai.js"></script>
+</body>
+</html>
