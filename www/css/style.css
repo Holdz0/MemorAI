@@ -63,6 +63,41 @@
     --ease-out: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
+/* Açık tema — yalnızca renk token'ları değişir. Renkler beyaz zeminde AA (≥4.5:1) için koyulaştırıldı */
+:root[data-theme="light"] {
+    color-scheme: light;
+
+    --bg-main: #f6f6f8;
+    --surface: #ffffff;
+    --surface-2: #f0f0f4;
+    --surface-3: #e5e5eb;
+    --panel-border: #e0e0e7;
+    --panel-border-hover: #c9c9d3;
+
+    --text-primary: #16161a;
+    --text-secondary: #4f4f5a;
+    --text-muted: #686873;
+
+    --accent-solid: #c2410c;
+    --accent-hover: #9a3412;
+    --accent-soft: rgba(194, 65, 12, 0.1);
+    --accent-line: rgba(194, 65, 12, 0.35);
+    --on-accent: #ffffff;
+
+    --success: #047857;
+    --danger: #dc2626;
+    --warning: #b45309;
+    --priority-high: #dc2626;
+    --priority-medium: #2563eb;
+    --priority-low: #047857;
+    --cat-work: #2563eb;
+    --cat-personal: #9333ea;
+    --cat-school: #047857;
+    --cat-health: #b45309;
+
+    --shadow-pop: 0 20px 50px rgba(0, 0, 0, 0.15);
+}
+
 /* Dokunmatik ekranda dokunma hedefi en az 44px (WCAG 2.5.5) */
 @media (pointer: coarse) {
     :root { --target-size: 44px; }

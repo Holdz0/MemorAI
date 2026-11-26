@@ -86,6 +86,7 @@ function init() {
     renderTasks();
     renderNotes();
     updateStats();
+    renderThemeButtons();
     initNotifications();
     initBackButton();
 }
@@ -1510,6 +1511,26 @@ document.getElementById('settings-key-remove').addEventListener('click', () => {
     clearApiKey();
     renderSettingsKeyStatus();
 });
+
+// ── Tema (applyTheme index.html <head> içinde tanımlı) ──────────
+const THEME_KEY = 'memorai_theme';
+const getThemePref = () => localStorage.getItem(THEME_KEY) || 'dark';
+
+function renderThemeButtons() {
+    const pref = getThemePref();
+    document.querySelectorAll('[data-theme-option]').forEach(btn => {
+        const on = btn.dataset.themeOption === pref;
+        btn.classList.toggle('primary', on);
+        btn.setAttribute('aria-pressed', on);
+    });
+}
+document.querySelectorAll('[data-theme-option]').forEach(btn => btn.addEventListener('click', () => {
+    localStorage.setItem(THEME_KEY, btn.dataset.themeOption);
+    applyTheme(btn.dataset.themeOption);
+    renderThemeButtons();
+}));
+// "Sistem" seçiliyken işletim sistemi teması değişirse anında uygula
+matchMedia('(prefers-color-scheme: light)').addEventListener('change', () => applyTheme(getThemePref()));
 
 // ==========================================
 // Donanım Geri Tuşu (Android)
