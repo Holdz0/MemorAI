@@ -8,6 +8,9 @@
 const express = require('express');
 const path    = require('path');
 
+// .env dosyasını yükle (Node ≥20.12). Dosya yoksa ortam değişkenleri kullanılır.
+try { process.loadEnvFile(); } catch {}
+
 const app  = express();
 const PORT = process.env.PORT || 3000;
 
@@ -20,24 +23,36 @@ if (!API_KEY) {
     console.warn('[Uyarı] OPENROUTER_API_KEY tanımlı değil — /api/chat çalışmayacak.');
 }
 
+// ── Güvenlik başlıkları (statik dosyalardan ÖNCE, yoksa onlara uygulanmaz) ──
+app.use((req, res, next) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+});
+
 // ── Middleware ──────────────────────────────────────────
 app.use(express.json({ limit: '1mb' }));
 
 // Statik dosyaları sun — www/ klasöründen
 app.use(express.static(path.join(__dirname, 'www')));
 
-// ── Güvenlik başlıkları ─────────────────────────────────
-app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
-    res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    next();
-});
-
 // ── Sağlık kontrolü ─────────────────────────────────────
 app.get('/api/health', (req, res) => {
     res.json({ ok: true, proxy: true });
+});
+
+// ── Model listesi (yalnızca tool çağırmayı destekleyenler) ──
+app.get('/api/models', async (req, res) => {
+    try {
+        const upstream = await fetch('https://openrouter.ai/api/v1/models?supported_parameters=tools', {
+            headers: API_KEY ? { 'Authorization': `Bearer ${API_KEY}` } : {}
+        });
+        res.status(upstream.status).json(await upstream.json());
+    } catch (err) {
+        console.error('[Models Error]', err.message);
+        res.status(502).json({ error: { message: 'Model listesi alınamadı.' } });
+    }
 });
 
 // ── AI Proxy endpoint ───────────────────────────────────
@@ -89,5 +104,5 @@ app.post('/api/chat', async (req, res) => {
 // ── Sunucuyu başlat ─────────────────────────────────────
 app.listen(PORT, () => {
     console.log(`\n🚀 Ajanda sunucusu çalışıyor: http://localhost:${PORT}`);
-    console.log(`🔑 API anahtarı: ✅ Yüklendi`);
+    console.log(`🔑 API anahtarı: ${API_KEY ? '✅ Yüklendi' : '❌ Tanımlı değil (.env)'}`);
 });

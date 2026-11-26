@@ -23,7 +23,9 @@ Doğal dille konuş, AI senin için planlasın.
 - Silinmiş görevi geri al (5 sn'lik undo)
 - Liste ve **mobil için yeniden tasarlanmış haftalık görünüm** (gün seçici tasarım)
 
-### 🤖 AI Asistan (OpenRouter + GPT-4o-mini)
+### 🤖 AI Asistan (OpenRouter)
+- **Ana ekranda komut çubuğu** — "Asistana yaz…" kutusu ve öneri çipleri; yapılan işlemler, AI'nın soruları ve yanıt çubuğun altında görünür
+- **Model seçimi** — Ayarlar → Model bölümünden OpenRouter modellerini ara ve seç (yalnızca tool calling destekleyenler; varsayılan GPT-4o-mini)
 - Doğal dille görev/not oluştur, güncelle, sil, listele
 - **Eksik detayları seçenekli sorularla belirler** — örn. "yarın saat 15'te toplantı ekle" deyince hatırlatıcı zamanını butonlu seçeneklerle sorar
 - Bağlamı kendi çıkarır — "okul ödevi" deyince kategoriyi otomatik seçer, sormaz
@@ -60,13 +62,15 @@ Doğal dille konuş, AI senin için planlasın.
 | **Frontend** | Saf HTML / CSS / JavaScript (build adımı yok) |
 | **Mobil paketleme** | [Capacitor 6](https://capacitorjs.com/) |
 | **Web sunucu** | [Express.js](https://expressjs.com/) (sadece web için proxy) |
-| **AI** | [OpenRouter](https://openrouter.ai/) → GPT-4o-mini |
+| **AI** | [OpenRouter](https://openrouter.ai/) → seçilebilir model (varsayılan GPT-4o-mini) |
 | **Bildirim** | `@capacitor/local-notifications` |
 | **Veri** | LocalStorage (cihaz içi) |
 
 ---
 
 ## 🚀 Kurulum (Web)
+
+**Gereksinim:** Node.js 20.12+ (`.env` dosyası yerleşik olarak yüklenir)
 
 ```bash
 git clone https://github.com/Holdz0/MemorAI.git
@@ -120,7 +124,7 @@ MemorAI/
 │       ├── app.js             # Görev/not yönetimi, modallar, geri tuşu
 │       └── ai.js              # AI asistan + OpenRouter
 ├── android/                   # Capacitor Android projesi
-├── server.js                  # Web: Express + /api/chat proxy
+├── server.js                  # Web: Express + /api/chat ve /api/models proxy
 ├── capacitor.config.json
 ├── package.json
 └── .env.example

@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#0a0a12">
+    <meta name="theme-color" content="#0b0b0f">
     <title>Agenda | Premium Workspace</title>
     
-    <!-- Fonts: Outfit for a modern geometric look -->
+    <!-- Font: Manrope (latin-ext — Türkçe karakterler) -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <!-- Icons: Phosphor Icons (Sleek, modern) -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
     
     <!-- Custom CSS -->
     <link rel="stylesheet" href="css/style.css">
@@ -35,68 +35,36 @@
     </nav>
 
     <div class="app-container">
-        <!-- Main Bento Grid Wrapper (Tasks View) -->
+        <!-- Ana ekran (Görevler) -->
         <div id="tasks-view" class="app-view active">
-            <main class="bento-grid">
-            
-            <!-- Widget 1: Header & Greeting -->
-            <header class="bento-card widget-greeting">
-                <div class="greeting-content">
-                    <h1 id="greeting-text">Günaydın, Taha.</h1>
-                    <p class="subtitle">Bugün harika işler başaracaksın.</p>
-                </div>
-                <div class="time-display" id="time-display">00:00</div>
-                <!-- Mobilde tarih + istatistik özeti (masaüstünde gizli) -->
-                <div class="mobile-greeting-meta">
-                    <span class="mgm-date" id="mgm-date">18 Mayıs · Pazartesi</span>
-                    <div class="mgm-stats">
-                        <i class="ph ph-target"></i>
-                        <span id="mgm-tasks-left">0</span> kaldı
-                        <div class="mgm-progress">
-                            <div class="mgm-fill" id="mgm-fill"></div>
-                        </div>
-                    </div>
-                </div>
-            </header>
 
-            <!-- Widget 2: Date & Mini Calendar -->
-            <aside class="bento-card widget-date">
-                <div class="date-header">
-                    <span class="month" id="current-month">Mayıs</span>
-                    <span class="year" id="current-year">2026</span>
+            <!-- Selamlama + AI komut çubuğu -->
+            <section class="home-hero" aria-label="Asistan">
+                <div class="home-greeting">
+                    <p class="home-date" id="home-date"></p>
+                    <h1 id="greeting-text">Merhaba, Taha.</h1>
                 </div>
-                <div class="day-large" id="current-day">01</div>
-                <div class="day-name" id="current-day-name">Cuma</div>
-            </aside>
-
-            <!-- Widget 3: Stats -->
-            <section class="bento-card widget-stats">
-                <div class="stat-icon"><i class="ph ph-check-circle"></i></div>
-                <div class="stat-details">
-                    <h3 id="tasks-left-count">0</h3>
-                    <p>Tamamlanacak Görev</p>
-                </div>
-                <!-- Progress ring could go here -->
-                <div class="progress-bar-container">
-                    <div class="progress-bar" id="task-progress"></div>
-                </div>
+                <form class="ai-bar" id="home-ai-form" autocomplete="off">
+                    <i class="ph ph-sparkle ai-bar-icon" aria-hidden="true"></i>
+                    <input type="text" id="home-ai-input" maxlength="1000" enterkeyhint="send"
+                        placeholder="Asistana yaz: yarın 15:00 diş doktoru…" aria-label="Asistana mesaj yaz">
+                    <button type="submit" class="ai-bar-send" id="home-ai-send" aria-label="Gönder">
+                        <i class="ph ph-arrow-up" aria-hidden="true"></i>
+                    </button>
+                </form>
+                <div class="ai-bar-chips" id="home-ai-chips"></div>
+                <div class="home-ai-result d-none" id="home-ai-result" aria-live="polite"></div>
             </section>
 
-            <!-- Widget 4: Add Task Trigger -->
-            <section class="bento-card widget-add-task widget-add-trigger" id="open-modal-btn">
-                <div class="add-trigger-content">
-                    <div class="add-icon-wrapper">
-                        <i class="ph ph-plus"></i>
-                    </div>
-                    <div>
-                        <h3>Yeni Görev Ekle</h3>
-                        <p>Detaylı planlama için tıkla</p>
-                    </div>
-                </div>
+            <!-- İlerleme -->
+            <section class="home-stats" aria-label="İlerleme">
+                <p class="stat-left"><strong id="tasks-left-count">0</strong> görev kaldı</p>
+                <div class="progress-track" aria-hidden="true"><div class="progress-fill" id="task-progress"></div></div>
+                <span class="stat-pct" id="task-progress-label">%0</span>
             </section>
 
-            <!-- Widget 5: Task List (Main Content) -->
-            <section class="bento-card widget-task-list">
+            <!-- Görevler -->
+            <section class="task-card" aria-label="Görevler">
                 <div class="list-header">
                     <div class="view-tabs">
                         <button class="view-tab active" data-view="list">Liste</button>
@@ -107,6 +75,9 @@
                         <button class="filter-btn" data-filter="active">Aktif</button>
                         <button class="filter-btn" data-filter="completed">Bitenler</button>
                     </div>
+                    <button class="btn-primary btn-sm add-task-btn" id="open-modal-btn">
+                        <i class="ph ph-plus" aria-hidden="true"></i><span>Yeni görev</span>
+                    </button>
                 </div>
                 <div class="search-sort-bar">
                     <div class="search-input-wrapper">
@@ -146,8 +117,6 @@
                     </div>
                 </div>
             </section>
-
-            </main>
         </div> <!-- End tasks-view -->
 
         <!-- Notes View -->
@@ -167,7 +136,7 @@
 
     <!-- Task Modal Overlay -->
     <div class="modal-overlay d-none" id="task-modal">
-        <div class="modal-box bento-card">
+        <div class="modal-box">
             <div class="modal-header">
                 <h2 id="modal-title">Yeni Görev Tanımla</h2>
                 <button class="close-modal-btn" id="close-modal-btn" aria-label="Kapat">
@@ -273,7 +242,7 @@
 
     <!-- Task Details Overlay -->
     <div class="modal-overlay d-none" id="task-details-modal">
-        <div class="modal-box bento-card">
+        <div class="modal-box">
             <div class="modal-header">
                 <h2>Görev Detayları</h2>
                 <button class="close-modal-btn" id="close-details-btn" aria-label="Kapat">
@@ -321,7 +290,7 @@
 
     <!-- Note Type Selection Modal -->
     <div class="modal-overlay d-none" id="note-type-modal">
-        <div class="modal-box bento-card modal-sm" style="max-width: 400px; text-align: center;">
+        <div class="modal-box modal-sm" style="max-width: 400px; text-align: center;">
             <div class="modal-header" style="justify-content: center; border-bottom: none; margin-bottom: 10px;">
                 <h2 style="font-size: 1.5rem;">Ne tür bir not?</h2>
                 <button class="close-modal-btn" id="close-note-type-btn" style="position: absolute; right: 24px;">
@@ -345,7 +314,7 @@
 
     <!-- Note Form Modal -->
     <div class="modal-overlay d-none" id="note-form-modal">
-        <div class="modal-box bento-card">
+        <div class="modal-box">
             <div class="modal-header">
                 <h2 id="note-modal-title">Yeni Not</h2>
                 <button class="close-modal-btn" id="close-note-form-btn">
@@ -429,6 +398,23 @@
                         <i class="ph ph-robot"></i> Yapay Zekâ Asistanı
                     </div>
                     <p class="settings-hint">Web sürümünde asistan sunucu üzerinden otomatik çalışır.</p>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-group-title">
+                        <i class="ph ph-cpu"></i> Model
+                    </div>
+                    <div class="ai-settings-model">
+                        <i class="ph ph-check-circle"></i>
+                        <span id="settings-model-current"></span>
+                    </div>
+                    <input type="search" id="settings-model-search" class="ai-settings-input"
+                        placeholder="Model ara (ör. claude, gemini, llama)…" autocomplete="off"
+                        aria-label="Model ara">
+                    <div class="model-list" id="settings-model-list"></div>
+                    <p class="settings-hint">
+                        Yalnızca araç çağırmayı (tool calling) destekleyen OpenRouter modelleri listelenir.
+                        Fiyatlar giriş / çıkış, 1M token başına.
+                    </p>
                 </div>
                 <div class="settings-group">
                     <div class="settings-group-title">

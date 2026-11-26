@@ -9,19 +9,13 @@ let searchQuery = '';
 let currentSort = 'default';
 let pendingDeleteTask = null;
 let undoTimeout = null;
-let selectedMobileDayIndex = -1;   // mobil haftalık görünümde seçili gün
-let lastRenderedWeekOffset = null; // son render'daki offset (gün sıfırlama için)
 let taskLog = JSON.parse(localStorage.getItem('agenda_task_log')) || []; // tamamlanıp silinen görevler
 let pendingDeleteLogId = null;     // geri alınabilir silmenin log kaydı
 const MAX_LOG = 200;
 
 // DOM Elements
-const timeDisplay = document.getElementById('time-display');
 const greetingText = document.getElementById('greeting-text');
-const currentMonth = document.getElementById('current-month');
-const currentYear = document.getElementById('current-year');
-const currentDay = document.getElementById('current-day');
-const currentDayName = document.getElementById('current-day-name');
+const homeDate = document.getElementById('home-date');
 
 const openModalBtn = document.getElementById('open-modal-btn');
 const taskModal = document.getElementById('task-modal');
@@ -57,6 +51,7 @@ const viewTabs = document.querySelectorAll('.view-tab');
 
 const tasksLeftCount = document.getElementById('tasks-left-count');
 const taskProgress = document.getElementById('task-progress');
+const taskProgressLabel = document.getElementById('task-progress-label');
 const filterBtns = document.querySelectorAll('.filter-btn');
 
 // Notes DOM Elements
@@ -87,7 +82,7 @@ const noteDeleteBtn = document.getElementById('note-delete-btn');
 // ==========================================
 function init() {
     updateDateTime();
-    setInterval(updateDateTime, 1000); // Update clock every second
+    setInterval(updateDateTime, 30000); // selamlama/tarih değişimi için yeterli
     renderTasks();
     renderNotes();
     updateStats();
@@ -219,35 +214,13 @@ async function initNotifications() {
 // ==========================================
 function updateDateTime() {
     const now = new Date();
-    
-    // Time
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-    timeDisplay.textContent = `${hours}:${minutes}`;
-    
-    // Greeting based on time
     const h = now.getHours();
-    let greeting = 'İyi Akşamlar';
+    let greeting = 'İyi akşamlar';
     if (h >= 5 && h < 12) greeting = 'Günaydın';
     else if (h >= 12 && h < 18) greeting = 'Tünaydın';
-    
-    // Assuming user name is Taha based on requested path
+
     greetingText.textContent = `${greeting}, Taha.`;
-
-    // Date
-    const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
-    const days = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-    
-    currentMonth.textContent = months[now.getMonth()];
-    currentYear.textContent = now.getFullYear();
-    currentDay.textContent = String(now.getDate()).padStart(2, '0');
-    currentDayName.textContent = days[now.getDay()];
-
-    // Mobile greeting meta — date label
-    const mgmDate = document.getElementById('mgm-date');
-    if (mgmDate) {
-        mgmDate.textContent = `${now.getDate()} ${months[now.getMonth()]} · ${days[now.getDay()]}`;
-    }
+    homeDate.textContent = now.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' });
 }
 
 // ==========================================
@@ -265,9 +238,19 @@ function normalizeReminder(val) {
     return isNaN(n) ? null : n;
 }
 
+/** Benzersiz ID — AI aynı milisaniyede birden çok kayıt oluşturabildiği için rastgele ek */
+function newId() {
+    return Date.now().toString() + Math.random().toString(36).slice(2, 7);
+}
+
+/** Yerel saate göre YYYY-MM-DD (toISOString UTC verir, gece yarısı sonrası bir gün kayar) */
+function localDateStr(d) {
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+}
+
 function addTask(title, descStr, dateStr, timeStr, priorityStr, categoryStr, reminderStr) {
     const newTask = {
-        id: Date.now().toString(),
+        id: newId(),
         text: title,
         desc: descStr || null,
         date: dateStr || null,
@@ -448,15 +431,9 @@ function updateStats() {
     const active = total - completed;
     const progressPercentage = total === 0 ? 0 : (completed / total) * 100;
 
-    // Desktop widgets
     tasksLeftCount.textContent = active;
     taskProgress.style.width = `${progressPercentage}%`;
-
-    // Mobile greeting meta
-    const mgmLeft = document.getElementById('mgm-tasks-left');
-    const mgmFill = document.getElementById('mgm-fill');
-    if (mgmLeft) mgmLeft.textContent = active;
-    if (mgmFill) mgmFill.style.width = `${progressPercentage}%`;
+    taskProgressLabel.textContent = `%${Math.round(progressPercentage)}`;
 }
 
 // ==========================================
@@ -519,7 +496,7 @@ function renderTasks() {
                     ${reminderBadge}
                     ${categoryBadge}
                 </div>
-                ${task.desc ? `<span class="task-desc-text">${escapeHTML(task.desc).replace(/\\n/g, '<br>')}</span>` : ''}
+                ${task.desc ? `<span class="task-desc-text">${escapeHTML(task.desc).replace(/\n/g, '<br>')}</span>` : ''}
             `;
         }
         
@@ -563,11 +540,10 @@ function renderTasks() {
     }
 }
 
-// Security utility to prevent XSS
+// XSS koruması — tırnaklar da kaçırılır, çünkü çıktı attribute içinde de kullanılıyor (title="...")
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 function escapeHTML(str) {
-    const p = document.createElement('p');
-    p.appendChild(document.createTextNode(str));
-    return p.innerHTML;
+    return String(str ?? '').replace(/[&<>"']/g, c => HTML_ESCAPES[c]);
 }
 
 // ==========================================
@@ -739,106 +715,114 @@ function renderWeeklyView() {
     }
 }
 
-// ── Mobil: Gün Seçici Görünümü ──────────────────────────
+// ── Mobil: 5 Gün × 24 Saat Tablo Görünümü ──────────────
 function renderWeeklyViewMobile() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const targetMonday = new Date(getMonday(today));
-    targetMonday.setDate(targetMonday.getDate() + (currentWeekOffset * 7));
+    const currentMonday = getMonday(today);
+
+    // Hedef hafta = bu haftadan offset kadar uzak
+    const targetMonday = new Date(currentMonday);
+    targetMonday.setDate(currentMonday.getDate() + (currentWeekOffset * 7));
+
+    // 21 gün render et: hedef haftadan 1 hafta öncesi + hedef + 1 hafta sonrası
+    const N_DAYS = 21;
+    const blockStart = new Date(targetMonday);
+    blockStart.setDate(blockStart.getDate() - 7);
+
+    const days = [];
+    for (let i = 0; i < N_DAYS; i++) {
+        const d = new Date(blockStart);
+        d.setDate(blockStart.getDate() + i);
+        days.push(d);
+    }
+
+    // Üst etiket — hedef haftanın aralığı
+    const targetEnd = new Date(targetMonday);
+    targetEnd.setDate(targetMonday.getDate() + 6);
+    const startStr = targetMonday.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+    const endStr   = targetEnd.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
+    weeklyRangeLabel.textContent = `${startStr} - ${endStr}`;
 
     const DAY_NAMES = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 
-    // 7 günlük dizi
-    const weekDates = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(targetMonday);
-        d.setDate(targetMonday.getDate() + i);
-        return d;
+    // Başlık satırı: corner + 21 gün başlığı
+    let headerHTML = '<div class="wt-corner"></div>';
+    days.forEach((d) => {
+        const dateStr = localDateStr(d);
+        const isToday = d.getTime() === today.getTime();
+        const weekday = (d.getDay() + 6) % 7;  // 0=Pzt, 6=Paz
+        const isWeekend = weekday >= 5;
+        const cls = ['wt-day-header'];
+        if (isToday) cls.push('today');
+        if (isWeekend) cls.push('weekend');
+        headerHTML += `
+            <div class="${cls.join(' ')}" data-date="${dateStr}">
+                <span class="wt-dh-name">${DAY_NAMES[weekday]}</span>
+                <span class="wt-dh-num">${d.getDate()}</span>
+            </div>`;
     });
 
-    // Hafta etiketi
-    const startStr = weekDates[0].toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
-    const endStr   = weekDates[6].toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' });
-    weeklyRangeLabel.textContent = `${startStr} - ${endStr}`;
-
-    // Hafta değişince veya ilk açılışta seçili günü ayarla
-    if (selectedMobileDayIndex < 0 || currentWeekOffset !== lastRenderedWeekOffset) {
-        const todayIdx = weekDates.findIndex(d => d.getTime() === today.getTime());
-        selectedMobileDayIndex = todayIdx >= 0 ? todayIdx : 0;
-        lastRenderedWeekOffset = currentWeekOffset;
+    // Saat sütunu: 24 satır
+    let hoursHTML = '';
+    for (let h = 0; h < 24; h++) {
+        hoursHTML += `<div class="wt-hour">${String(h).padStart(2, '0')}:00</div>`;
     }
 
-    // Gün rozetleri
-    const pillsHTML = weekDates.map((d, i) => {
-        const tzOffset = d.getTimezoneOffset();
-        const dateStr  = new Date(d.getTime() - tzOffset * 60000).toISOString().split('T')[0];
-        const isToday    = d.getTime() === today.getTime();
-        const hasTasks   = tasks.some(t => t.date === dateStr);
-        const isSelected = i === selectedMobileDayIndex;
-        return `
-            <button class="day-pill${isToday ? ' today' : ''}${isSelected ? ' selected' : ''}${hasTasks ? ' has-tasks' : ''}"
-                    data-day-idx="${i}" data-date="${dateStr}">
-                <span class="dp-name">${DAY_NAMES[i]}</span>
-                <span class="dp-num">${d.getDate()}</span>
-                <span class="dp-dot"></span>
-            </button>`;
-    }).join('');
+    // Görev çipleri — sadece saat içerenler grid'e yerleşir
+    let tasksHTML = '';
+    days.forEach((d, dayIdx) => {
+        const dateStr = localDateStr(d);
+        const dayTasks = tasks.filter(t => t.date === dateStr && t.time);
 
-    // Seçili günün görevleri
-    const selDate    = weekDates[selectedMobileDayIndex];
-    const tzOff      = selDate.getTimezoneOffset();
-    const selDateStr = new Date(selDate.getTime() - tzOff * 60000).toISOString().split('T')[0];
-    const selTasks   = tasks
-        .filter(t => t.date === selDateStr)
-        .sort((a, b) => {
-            if (!a.time && !b.time) return 0;
-            if (!a.time) return 1;
-            if (!b.time) return -1;
-            return a.time.localeCompare(b.time);
+        // Aynı saatteki görevleri grupla (yan yana stack için)
+        const byHour = {};
+        dayTasks.forEach(t => {
+            const hh = parseInt(t.time.split(':')[0], 10);
+            if (isNaN(hh) || hh < 0 || hh > 23) return;
+            (byHour[hh] = byHour[hh] || []).push(t);
         });
 
-    const selDayLabel = selDate.toLocaleDateString('tr-TR', {
-        weekday: 'long', day: 'numeric', month: 'long'
+        Object.keys(byHour).forEach(hourKey => {
+            const h = parseInt(hourKey, 10);
+            const group = byHour[h];
+            const n = group.length;
+            group.forEach((t, i) => {
+                const cls = ['wt-task', `prio-${t.priority || 'medium'}`];
+                if (t.completed) cls.push('completed');
+                tasksHTML += `
+                    <div class="${cls.join(' ')}"
+                         data-id="${t.id}"
+                         style="--day:${dayIdx};--h:${h};--si:${i};--sn:${n}"
+                         title="${escapeHTML(t.text)} · ${escapeHTML(t.time)}">
+                        ${escapeHTML(t.text)}
+                    </div>`;
+            });
+        });
     });
-
-    let tasksHTML;
-    if (selTasks.length === 0) {
-        tasksHTML = `<div class="weekly-empty-day">
-            <i class="ph ph-check-circle"></i>
-            <span>Bu gün için görev yok</span>
-        </div>`;
-    } else {
-        tasksHTML = selTasks.map(t => `
-            <div class="weekly-day-task${t.completed ? ' completed' : ''}" data-id="${t.id}">
-                <span class="wdt-dot priority-dot ${t.priority || 'medium'}"></span>
-                <div class="wdt-info">
-                    <span class="wdt-text">${escapeHTML(t.text)}</span>
-                    ${t.time ? `<span class="wdt-time">${t.time}</span>` : ''}
-                </div>
-            </div>`).join('');
-    }
 
     weeklyGridContainer.innerHTML = `
-        <div class="mobile-week-view">
-            <div class="day-selector">${pillsHTML}</div>
-            <div class="selected-day-header">
-                <i class="ph ph-calendar-blank"></i>
-                <span>${selDayLabel}</span>
+        <div class="weekly-table" style="--days:${N_DAYS}">
+            <div class="wt-header-row">${headerHTML}</div>
+            <div class="wt-body">
+                <div class="wt-hour-col">${hoursHTML}</div>
+                <div class="wt-grid">${tasksHTML}</div>
             </div>
-            <div class="mobile-day-tasks">${tasksHTML}</div>
         </div>`;
 
-    // Gün rozetlerine tıklama
-    weeklyGridContainer.querySelectorAll('.day-pill').forEach(pill => {
-        pill.addEventListener('click', () => {
-            selectedMobileDayIndex = parseInt(pill.dataset.dayIdx);
-            renderWeeklyViewMobile();
-        });
+    // Açılışta yatayda hedef hafta Pazartesi'sine (index 7), dikeyde 07:00'a kaydır
+    requestAnimationFrame(() => {
+        const dh = weeklyGridContainer.querySelector('.wt-day-header');
+        const hr = weeklyGridContainer.querySelector('.wt-hour');
+        if (dh) weeklyGridContainer.scrollLeft = 7 * dh.getBoundingClientRect().width;
+        if (hr) weeklyGridContainer.scrollTop  = 7 * hr.getBoundingClientRect().height;
     });
 
-    // Görev detayına tıklama
-    weeklyGridContainer.querySelectorAll('.weekly-day-task').forEach(el => {
+    // Görev çipine tıklama → detay
+    weeklyGridContainer.querySelectorAll('.wt-task').forEach(el => {
         el.addEventListener('click', () => openDetailsModal(el.dataset.id));
     });
+
 }
 
 // ── Masaüstü: 5 Haftalık Kaydırmalı Görünüm ─────────────
@@ -885,8 +869,7 @@ function renderWeeklyViewDesktop() {
 
     for(let i=0; i<35; i++) {
         const currentDate = weekDates[i];
-        const offset = currentDate.getTimezoneOffset();
-        const targetDateStr = new Date(currentDate.getTime() - (offset*60*1000)).toISOString().split('T')[0];
+        const targetDateStr = localDateStr(currentDate);
 
         const dayTasks = tasks.filter(t => t.date === targetDateStr);
         dayTasks.sort((a, b) => {
@@ -898,7 +881,7 @@ function renderWeeklyViewDesktop() {
 
         let tasksHTML = dayTasks.map(t => `
             <div class="mini-task ${t.completed ? 'completed' : ''}" data-id="${t.id}">
-                ${t.time ? `<span class="mini-task-time">${t.time}</span>` : ''}
+                ${t.time ? `<span class="mini-task-time">${escapeHTML(t.time)}</span>` : ''}
                 <span><span class="priority-dot ${t.priority}"></span>${escapeHTML(t.text)}</span>
             </div>
         `).join('');
@@ -1239,7 +1222,7 @@ modalNoteForm.addEventListener('submit', (e) => {
         }
     } else {
         notes.unshift({
-            id: Date.now().toString(),
+            id: newId(),
             type,
             title,
             content,
@@ -1332,7 +1315,7 @@ document.getElementById('mbn-fab')?.addEventListener('click', () => openModal(fa
 /** Yeni not oluşturur ve render eder — ai.js tarafından çağrılır */
 function addNoteAI(type, title, content) {
     const newNote = {
-        id: Date.now().toString(),
+        id: newId(),
         type,
         title,
         content,
@@ -1465,6 +1448,8 @@ function openSettings() {
     renderSettingsKeyStatus();
     const inp = document.getElementById('settings-key-input');
     if (inp) inp.value = '';
+    document.getElementById('settings-model-search').value = '';
+    renderModelPicker();
     settingsModal.classList.add('visible');
 }
 

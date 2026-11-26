@@ -11,7 +11,7 @@
     "build:android": "npx cap sync android && npx cap open android"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.12.0"
   },
   "dependencies": {
     "@capacitor/app": "^6.0.3",

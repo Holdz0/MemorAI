@@ -2,9 +2,13 @@
 // AI Assistant — OpenRouter / GPT-4o-mini
 // ==========================================
 
-const AI_MODEL        = 'openai/gpt-4o-mini';
+const AI_DEFAULT_MODEL = 'openai/gpt-4o-mini';
+const AI_MODEL_STORAGE = 'ajanda_ai_model';
 const AI_PROXY_URL    = '/api/chat';
 const AI_DIRECT_URL   = 'https://openrouter.ai/api/v1/chat/completions';
+const AI_PROXY_MODELS_URL  = '/api/models';
+const AI_DIRECT_MODELS_URL = 'https://openrouter.ai/api/v1/models?supported_parameters=tools';
+const MAX_TOOL_ROUNDS = 10;   // model durmadan araç çağırırsa API harcamasını kes
 // Geliştirme için yerel olarak bir varsayılan anahtar tanımlayabilirsin.
 // Boş bırakırsan "Varsayılan Anahtarı Kullan" butonları gizlenir.
 // UYARI: Bu dosyayı public bir repoya commitlemeden önce DAİMA boş bırak.
@@ -24,7 +28,28 @@ let aiIsProcessing      = false;
 let activeSessionId     = null;
 let aiSessions          = [];
 let pendingOptionResolve = null;  // seçenek sorusu beklerken çözücü fonksiyon
-let currentOptionBlock   = null;  // aktif seçenek butonları DOM elemanı
+
+// ──────────────────────────────────────────────
+// AI İşlem Hafızası — sohbetler arası kalıcı
+// AI'nın yaptığı her CRUD'ı snapshot'ıyla saklar
+// ──────────────────────────────────────────────
+const AI_LOG_KEY = 'agenda_ai_action_log';
+const MAX_AI_LOG = 100;
+let aiActionLog = (() => {
+    try { return JSON.parse(localStorage.getItem(AI_LOG_KEY)) || []; }
+    catch { return []; }
+})();
+
+function logAIAction(entry) {
+    aiActionLog.unshift({ ts: new Date().toISOString(), ...entry });
+    if (aiActionLog.length > MAX_AI_LOG) aiActionLog.length = MAX_AI_LOG;
+    try { localStorage.setItem(AI_LOG_KEY, JSON.stringify(aiActionLog)); } catch {}
+}
+
+function clearAIActionLog() {
+    aiActionLog = [];
+    try { localStorage.removeItem(AI_LOG_KEY); } catch {}
+}
 
 // ==========================================
 // API Anahtarı Yönetimi (mobil)
@@ -48,6 +73,100 @@ function clearApiKey() {
 /** AI kullanılabilir mi? Web'de proxy hep var; mobilde anahtar gerekli. */
 function hasApiKey() {
     return IS_NATIVE ? Boolean(getApiKey()) : true;
+}
+
+// ==========================================
+// Model Seçimi (OpenRouter)
+// ==========================================
+
+function getModel() {
+    return localStorage.getItem(AI_MODEL_STORAGE) || AI_DEFAULT_MODEL;
+}
+
+function setModel(id) {
+    localStorage.setItem(AI_MODEL_STORAGE, id);
+    updateModelLabel();
+}
+
+function updateModelLabel() {
+    const el = document.querySelector('.ai-model-label');
+    if (el) el.textContent = `${getModel()} · OpenRouter`;
+}
+
+let aiModelsCache = null;  // oturum boyunca bir kez çekilir
+
+/** Tool çağırmayı destekleyen OpenRouter modellerini getirir (web: proxy, mobil: doğrudan) */
+async function fetchModels() {
+    if (aiModelsCache) return aiModelsCache;
+    const key = getApiKey();
+    const res = IS_NATIVE
+        ? await fetch(AI_DIRECT_MODELS_URL, { headers: key ? { 'Authorization': `Bearer ${key}` } : {} })
+        : await fetch(AI_PROXY_MODELS_URL);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    // Uygulama araç çağrısına dayanıyor — sorgu parametresi yok sayılırsa diye istemcide de süz
+    aiModelsCache = (data.data || []).filter(m => m.supported_parameters?.includes('tools'));
+    return aiModelsCache;
+}
+
+/** OpenRouter fiyatı (USD/token, string) → "$0.15/M" */
+function formatModelPrice(m) {
+    const p = Number(m.pricing?.prompt), c = Number(m.pricing?.completion);
+    if (p === 0 && c === 0) return 'Ücretsiz';
+    if (!(p > 0)) return 'Değişken fiyat';
+    return `$${+(p * 1e6).toFixed(2)} / $${+(c * 1e6).toFixed(2)} per 1M`;
+}
+
+const MODEL_LIST_LIMIT = 50;
+
+/** Ayarlar sayfasındaki model arama listesini çizer */
+async function renderModelPicker() {
+    const list   = document.getElementById('settings-model-list');
+    const search = document.getElementById('settings-model-search');
+    const cur    = document.getElementById('settings-model-current');
+    if (!list || !search) return;
+    if (cur) cur.textContent = getModel();
+
+    let models;
+    try {
+        if (!aiModelsCache) list.innerHTML = '<div class="model-list-msg"><i class="ph ph-circle-notch ai-spin"></i> Modeller yükleniyor…</div>';
+        models = await fetchModels();
+    } catch (err) {
+        list.innerHTML = `<div class="model-list-msg">Model listesi alınamadı (${escapeHTML(err.message)}).</div>`;
+        return;
+    }
+
+    const q = search.value.trim().toLowerCase();
+    const matches = q
+        ? models.filter(m => m.id.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
+        : models;
+
+    if (!matches.length) {
+        list.innerHTML = '<div class="model-list-msg">Eşleşen model yok.</div>';
+        return;
+    }
+
+    const selected = getModel();
+    list.innerHTML = '';
+    matches.slice(0, MODEL_LIST_LIMIT).forEach(m => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `model-item${m.id === selected ? ' selected' : ''}`;
+        const ctx = m.context_length ? ` · ${Math.round(m.context_length / 1000)}K bağlam` : '';
+        btn.innerHTML = `
+            <span class="model-item-name">${escapeHTML(m.name || m.id)}</span>
+            <span class="model-item-id">${escapeHTML(m.id)}</span>
+            <span class="model-item-meta">${escapeHTML(formatModelPrice(m) + ctx)}</span>`;
+        btn.addEventListener('click', () => {
+            setModel(m.id);
+            renderModelPicker();
+        });
+        list.appendChild(btn);
+    });
+    if (matches.length > MODEL_LIST_LIMIT) {
+        list.insertAdjacentHTML('beforeend',
+            `<div class="model-list-msg">+${matches.length - MODEL_LIST_LIMIT} model daha — aramayı daralt.</div>`);
+    }
 }
 
 // ==========================================
@@ -192,8 +311,8 @@ const AI_TOOLS = [
 // ==========================================
 function buildSystemPrompt() {
     const now          = new Date();
-    const todayISO     = now.toISOString().split('T')[0];
-    const tomorrowISO  = new Date(now.getTime() + 86400000).toISOString().split('T')[0];
+    const todayISO     = localDateStr(now);
+    const tomorrowISO  = localDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
     const todayTR      = now.toLocaleDateString('tr-TR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     const timeStr      = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
@@ -217,6 +336,8 @@ function buildSystemPrompt() {
           ).join('\n')
         : '  (Henüz not yok)';
 
+    const actionLines = formatActionLog(pLabel, cLabel);
+
     return `Sen kişisel ajanda asistanısın. Kullanıcının görev ve notlarını gerçek zamanlı yönetebilirsin.
 
 📅 Bugün: ${todayTR} — Saat: ${timeStr}
@@ -228,11 +349,25 @@ ${taskLines}
 ━━━ NOTLAR (${notes.length} adet) ━━━
 ${noteLines}
 
+━━━ SON AI İŞLEMLERİ — senin yaptıkların (en yeniden eskiye, en fazla 30) ━━━
+${actionLines}
+
 KURALLAR:
 - Daima Türkçe konuş, samimi ve özlü ol
 - Birden fazla işlem gerekiyorsa tüm araçları aynı anda çağır
 - Görev/not ID'lerini doğru kullan; listede görünen ID'yi referans al
 - Kısa yanıtlar ver; uzun listeler için markdown kullan
+
+GERİ ALMA & İŞLEM HAFIZASI:
+- "SON AI İŞLEMLERİ" listesi senin daha önce yaptığın işlemleri TAM VERİYLE içerir.
+- Kullanıcı "sildiğin görevi geri getir", "son yaptığını iptal et", "az önce eklediğini sil"
+  gibi ifadeler kullanırsa bu listeyi referans al ve uygun aracı çağır:
+  • Silinen görev → create_task ile snapshot'taki TÜM verilerle (text, desc, date,
+    time, priority, category, reminder) yeniden oluştur.
+  • Silinen not → create_note ile snapshot'taki content/items ile yeniden oluştur.
+  • Hatalı güncelleme → update_task ile "before" değerlerine geri döndür.
+  • Hatalı tamamlama/aktife alma → complete_task ile durumu tersine çevir.
+- Belirsizlik varsa en yeni (listedeki ilk) işlemi al; emin değilsen kullanıcıya sor.
 
 GÖREV OLUŞTURMA AKIŞI:
 - Bağlamdan ÇIKARILABİLEN detayları kendin belirle, ASLA sorma:
@@ -248,17 +383,106 @@ GÖREV OLUŞTURMA AKIŞI:
 - Aynı anda en fazla 1-2 soru sor; gerek yoksa hiç sorma, direkt oluştur.
 - Saat yoksa hatırlatıcı sorma (hatırlatıcı tarih+saat gerektirir).
 - Kullanıcı cevap verince seçimi uygun değere çevir ve görevi oluştur
-  (ör. "1 saat önce"→reminder 60, "1 gün önce"→1440, "Hatırlatma yok"→reminder gönderme).`;
+  (ör. "1 saat önce"→reminder 60, "1 gün önce"→1440, "Hatırlatma yok"→reminder gönderme).
+- GERİ ALMA durumunda bu akış geçerli DEĞİL — snapshot'taki orijinal değerleri kullan.`;
+}
+
+/** AI işlem hafızasını sistem promptu için biçimlendir */
+function formatActionLog(pLabel, cLabel) {
+    if (!aiActionLog || aiActionLog.length === 0) return '  (Henüz işlem yok)';
+
+    const fmtTaskSnap = (t) => {
+        if (!t) return '';
+        const parts = [];
+        if (t.date)                parts.push(`tarih=${t.date}${t.time ? ' ' + t.time : ''}`);
+        if (t.priority)            parts.push(`öncelik=${pLabel[t.priority] || t.priority}`);
+        if (t.category)            parts.push(`kategori=${cLabel[t.category] || t.category}`);
+        if (t.reminder !== null && t.reminder !== undefined)
+                                   parts.push(`hatırlatıcı=${t.reminder}dk`);
+        if (t.completed)           parts.push('tamamlanmıştı');
+        if (t.desc)                parts.push(`açıklama="${String(t.desc).slice(0, 80)}"`);
+        return parts.length ? ' | ' + parts.join(' | ') : '';
+    };
+
+    return aiActionLog.slice(0, 30).map(a => {
+        const d = new Date(a.ts);
+        const time = d.toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        switch (a.op) {
+            case 'create_task': {
+                const t = a.snapshot;
+                if (!t) return `  • [${time}] oluşturdum bir görev`;
+                return `  • [${time}] OLUŞTURDUM görevi (id=${t.id}): "${t.text}"${fmtTaskSnap(t)}`;
+            }
+            case 'delete_task': {
+                const t = a.snapshot;
+                if (!t) return `  • [${time}] sildim görev (id=${a.id})`;
+                return `  • [${time}] SİLDİM görevi (orig.id=${t.id}): "${t.text}"${fmtTaskSnap(t)}`;
+            }
+            case 'update_task': {
+                const b = a.before, af = a.after;
+                if (!b || !af) return `  • [${time}] güncelledim görev (id=${a.id})`;
+                const changes = [];
+                if (b.text     !== af.text)     changes.push(`metin "${b.text}"→"${af.text}"`);
+                if ((b.desc||'') !== (af.desc||'')) changes.push(`açıklama değişti`);
+                if ((b.date||'') !== (af.date||'')) changes.push(`tarih ${b.date||'-'}→${af.date||'-'}`);
+                if ((b.time||'') !== (af.time||'')) changes.push(`saat ${b.time||'-'}→${af.time||'-'}`);
+                if (b.priority !== af.priority) changes.push(`öncelik ${pLabel[b.priority]||b.priority}→${pLabel[af.priority]||af.priority}`);
+                if ((b.category||'') !== (af.category||'')) changes.push(`kategori ${b.category||'-'}→${af.category||'-'}`);
+                if ((b.reminder ?? null) !== (af.reminder ?? null)) changes.push(`hatırlatıcı ${b.reminder ?? '-'}→${af.reminder ?? '-'}`);
+                return `  • [${time}] GÜNCELLEDİM "${af.text}" (id=${af.id}): ${changes.join(', ') || '(değişiklik yok)'}`;
+            }
+            case 'complete_task':
+                return `  • [${time}] ${a.completed ? 'TAMAMLADIM' : 'AKTİFE ALDIM'} görev "${a.text}" (id=${a.id})`;
+            case 'create_note': {
+                const n = a.snapshot;
+                if (!n) return `  • [${time}] oluşturdum bir not`;
+                return `  • [${time}] OLUŞTURDUM notu (id=${n.id}): "${n.title}" (${n.type})`;
+            }
+            case 'delete_note': {
+                const n = a.snapshot;
+                if (!n) return `  • [${time}] sildim not (id=${a.id})`;
+                const contentBlurb = n.type === 'list'
+                    ? `[${(n.content || []).map(i => i.text).slice(0, 6).join(', ')}${(n.content || []).length > 6 ? ', …' : ''}]`
+                    : `"${String(n.content || '').slice(0, 100)}"`;
+                return `  • [${time}] SİLDİM notu (orig.id=${n.id}): "${n.title}" (${n.type}) içerik=${contentBlurb}`;
+            }
+            default:
+                return `  • [${time}] ${a.op}`;
+        }
+    }).join('\n');
 }
 
 // ==========================================
 // Tool Execution
 // ==========================================
+
+/**
+ * Model çıktısı güvenilmez: geçersiz alanları undefined yapar (oluştururken varsayılan,
+ * güncellerken "değiştirme" anlamına gelir). Boş string geçerlidir (alanı temizler).
+ */
+function cleanTaskArgs(a) {
+    const valid = (v, ok) => (v === undefined || v === '' || ok(v)) ? v : undefined;
+    const str = v => typeof v === 'string';
+    return {
+        ...a,
+        text:     str(a.text) && a.text.trim() ? a.text.trim() : undefined,
+        desc:     valid(a.desc, str),
+        date:     valid(a.date, v => str(v) && /^\d{4}-\d{2}-\d{2}$/.test(v)),
+        time:     valid(a.time, v => str(v) && /^\d{2}:\d{2}$/.test(v)),
+        priority: ['low', 'medium', 'high'].includes(a.priority) ? a.priority : undefined,
+        category: valid(a.category, v => ['work', 'personal', 'school', 'health'].includes(v)),
+        reminder: a.reminder !== undefined && a.reminder !== null && Number(a.reminder) in REMINDER_LABELS
+            ? Number(a.reminder) : undefined
+    };
+}
+
 function executeTool(toolName, args) {
     try {
+        if (toolName === 'create_task' || toolName === 'update_task') args = cleanTaskArgs(args);
         switch (toolName) {
 
             case 'create_task': {
+                if (!args.text) return '✗ Görev başlığı gerekli';
                 addTask(
                     args.text,
                     args.desc     || '',
@@ -268,12 +492,16 @@ function executeTool(toolName, args) {
                     args.category || '',
                     args.reminder
                 );
+                // tasks dizisinin en başına eklenir → snapshot tasks[0]
+                const created = tasks[0];
+                logAIAction({ op: 'create_task', snapshot: created ? { ...created } : null });
                 return `✓ Görev oluşturuldu: "${args.text}"`;
             }
 
             case 'update_task': {
                 const task = tasks.find(t => t.id === args.id);
                 if (!task) return `✗ Görev bulunamadı (ID: ${args.id})`;
+                const before = { ...task };
                 updateTask(
                     args.id,
                     args.text     !== undefined ? args.text     : task.text,
@@ -284,34 +512,51 @@ function executeTool(toolName, args) {
                     args.category !== undefined ? args.category : (task.category || ''),
                     args.reminder
                 );
+                const after = tasks.find(t => t.id === args.id);
+                logAIAction({ op: 'update_task', id: args.id, before, after: after ? { ...after } : null });
                 return `✓ Görev güncellendi: "${args.text || task.text}"`;
             }
 
             case 'complete_task': {
                 const task = tasks.find(t => t.id === args.id);
                 if (!task) return `✗ Görev bulunamadı (ID: ${args.id})`;
-                if (task.completed !== args.completed) toggleTaskStatus(args.id);
-                return `✓ "${task.text}" → ${args.completed ? 'tamamlandı' : 'aktif yapıldı'}`;
+                const done = args.completed === true || args.completed === 'true';
+                if (task.completed !== done) toggleTaskStatus(args.id);
+                logAIAction({ op: 'complete_task', id: args.id, text: task.text, completed: done });
+                return `✓ "${task.text}" → ${done ? 'tamamlandı' : 'aktif yapıldı'}`;
             }
 
             case 'delete_task': {
                 const task = tasks.find(t => t.id === args.id);
                 if (!task) return `✗ Görev bulunamadı (ID: ${args.id})`;
+                const snapshot = { ...task };  // silmeden ÖNCE tüm veriyi yakala
                 const label = task.text;
                 deleteTask(args.id, null);
+                logAIAction({ op: 'delete_task', id: args.id, snapshot });
                 return `✓ Görev silindi: "${label}"`;
             }
 
             case 'create_note': {
-                const content = args.type === 'list'
-                    ? (args.items || []).map(i => ({ text: i.text, checked: i.checked || false }))
-                    : (args.content || '');
-                addNoteAI(args.type, args.title, content);
+                const title = typeof args.title === 'string' ? args.title.trim() : '';
+                if (!title) return '✗ Not başlığı gerekli';
+                const type = args.type === 'list' ? 'list' : 'text';
+                const content = type === 'list'
+                    ? (Array.isArray(args.items) ? args.items : [])
+                        .map(i => ({ text: String(i?.text ?? '').trim(), checked: i?.checked === true }))
+                        .filter(i => i.text)
+                    : String(args.content ?? '');
+                addNoteAI(type, title, content);
+                const created = notes[0];
+                logAIAction({ op: 'create_note', snapshot: created ? { ...created } : null });
                 return `✓ Not oluşturuldu: "${args.title}"`;
             }
 
             case 'delete_note': {
+                const before = notes.find(n => n.id === args.id);
                 const ok = deleteNoteAI(args.id);
+                if (ok && before) {
+                    logAIAction({ op: 'delete_note', id: args.id, snapshot: { ...before } });
+                }
                 return ok ? `✓ Not silindi` : `✗ Not bulunamadı (ID: ${args.id})`;
             }
 
@@ -368,11 +613,14 @@ function sessionSaveCurrent() {
 
 /** Bir session'ı yükle ve sohbet ekranını doldur */
 function sessionLoad(id) {
+    // İşlem/soru sürerken yüklenirse biten döngü yüklenen sohbetin üzerine yazar
+    if (aiIsProcessing) return;
     const session = aiSessions.find(s => s.id === id);
     if (!session) return;
 
     activeSessionId     = id;
-    conversationHistory = [...session.messages];
+    // Eski sürümün kaydettiği, yetim 'tool' ile başlayan geçmişleri de onarır
+    conversationHistory = trimHistory([...session.messages]);
 
     const box = document.getElementById('ai-chat-messages');
     box.innerHTML = '';
@@ -526,7 +774,7 @@ function onApiKeyChanged() {
 // ==========================================
 async function callOpenRouter(messages) {
     const payload = {
-        model:       AI_MODEL,
+        model:       getModel(),
         messages,
         tools:       AI_TOOLS,
         tool_choice: 'auto',
@@ -570,6 +818,17 @@ async function callOpenRouter(messages) {
 // ==========================================
 // Main Conversation Flow
 // ==========================================
+
+/**
+ * Son MAX_HISTORY mesajı tutar ama kesimi bir 'user' mesajında başlatır:
+ * başta yetim kalan 'tool' / tool_calls mesajları API'de 400 hatasına yol açar.
+ */
+function trimHistory(msgs) {
+    const cut = Math.max(0, msgs.length - MAX_HISTORY);
+    let start = msgs.findIndex((m, i) => i >= cut && m.role === 'user');
+    if (start === -1) start = msgs.map(m => m.role).lastIndexOf('user');
+    return msgs.slice(Math.max(start, 0));
+}
 async function sendMessageToAI(userMessage) {
     if (aiIsProcessing) return;
 
@@ -583,20 +842,23 @@ async function sendMessageToAI(userMessage) {
     setSendButtonState(true);
     removeSuggestions();
     appendChatMsg('user', userMessage);
+    homeResultStart(userMessage);
     conversationHistory.push({ role: 'user', content: userMessage });
     showTypingDots();
 
     try {
         let loopMsgs = [...conversationHistory];
+        let finished = false;
 
-        while (true) {
+        for (let round = 0; round < MAX_TOOL_ROUNDS && !finished; round++) {
             const data = await callOpenRouter([
                 { role: 'system', content: buildSystemPrompt() },
                 ...loopMsgs
             ]);
 
-            const choice = data.choices[0];
-            const msg    = choice.message;
+            // OpenRouter sağlayıcı hatalarını bazen HTTP 200 + error gövdesiyle döndürür
+            const msg = data.choices?.[0]?.message;
+            if (!msg) throw new Error(data.error?.message || 'Modelden boş yanıt geldi.');
             loopMsgs.push(msg);
 
             if (msg.tool_calls && msg.tool_calls.length > 0) {
@@ -620,19 +882,24 @@ async function sendMessageToAI(userMessage) {
                 if (actionResults.length) {
                     hideTypingDots();
                     appendActionChips(actionResults);
+                    homeResultAppend(buildActionChips(actionResults));
                     showTypingDots();
                 }
             } else {
                 hideTypingDots();
                 if (msg.content) appendChatMsg('assistant', msg.content);
-                conversationHistory = loopMsgs.slice(-MAX_HISTORY);
+                else appendChatMsg('error', 'Model metin yanıtı döndürmedi.');
+                homeResultFinish(msg.content || 'Model metin yanıtı döndürmedi.', !msg.content);
+                conversationHistory = trimHistory(loopMsgs);
                 sessionSaveCurrent();
-                break;
+                finished = true;
             }
         }
+        if (!finished) throw new Error(`Model ${MAX_TOOL_ROUNDS} turda yanıtı bitirmedi, işlem durduruldu.`);
     } catch (err) {
         hideTypingDots();
         appendChatMsg('error', `❌ Hata: ${err.message}`);
+        homeResultFinish(`Hata: ${err.message}`, true);
         console.error('[AI Error]', err);
     }
 
@@ -676,10 +943,8 @@ function appendChatMsg(role, text) {
     box.scrollTop = box.scrollHeight;
 }
 
-/** AI'nın yaptığı işlemleri rozet olarak gösterir */
-function appendActionChips(results) {
-    if (!results || !results.length) return;
-    const box  = document.getElementById('ai-chat-messages');
+/** İşlem sonuçlarından (✓/✗ metinleri) rozet listesi üretir — panel ve ana ekran ortak */
+function buildActionChips(results) {
     const wrap = document.createElement('div');
     wrap.className = 'ai-actions';
     results.forEach(r => {
@@ -687,10 +952,17 @@ function appendActionChips(results) {
         const text = r.replace(/^[✓✗]\s*/, '');
         const chip = document.createElement('div');
         chip.className = `ai-action-chip ${ok ? 'ok' : 'fail'}`;
-        chip.innerHTML = `<i class="ph ${ok ? 'ph-check-circle' : 'ph-warning-circle'}"></i><span>${escapeHTML(text)}</span>`;
+        chip.innerHTML = `<i class="ph ${ok ? 'ph-check-circle' : 'ph-warning-circle'}" aria-hidden="true"></i><span>${escapeHTML(text)}</span>`;
         wrap.appendChild(chip);
     });
-    box.appendChild(wrap);
+    return wrap;
+}
+
+/** AI'nın yaptığı işlemleri sohbete rozet olarak ekler */
+function appendActionChips(results) {
+    if (!results || !results.length) return;
+    const box = document.getElementById('ai-chat-messages');
+    box.appendChild(buildActionChips(results));
     box.scrollTop = box.scrollHeight;
 }
 
@@ -706,54 +978,58 @@ function handleAskOptions(args) {
             pendingOptionResolve = null;
             setSendButtonState(true);
             showTypingDots();
+            homeResultBusy(true);
             resolve(choice);
         };
         pendingOptionResolve = done;
-        const opts = Array.isArray(args.options) ? args.options : [];
-        renderOptionButtons(args.question || 'Bir seçenek seç:', opts, done);
+        const question = args.question || 'Bir seçenek seç:';
+        const opts = (Array.isArray(args.options) ? args.options : []).map(String);
+        renderOptionButtons(question, opts);
+        homeResultAsk(question, opts);
     });
+}
+
+/** Seçenek butonları bloğu — panel ve ana ekran ortak */
+function buildOptionButtons(options) {
+    const wrap = document.createElement('div');
+    wrap.className = 'ai-options';
+    options.forEach(label => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ai-option-btn';
+        btn.innerHTML = `<i class="ph ph-circle-dashed" aria-hidden="true"></i><span>${escapeHTML(label)}</span>`;
+        btn.addEventListener('click', () => answerPendingOption(label));
+        wrap.appendChild(btn);
+    });
+    return wrap;
 }
 
 /** Soru metnini + seçenek butonlarını sohbete basar */
-function renderOptionButtons(question, options, onPick) {
+function renderOptionButtons(question, options) {
     const box = document.getElementById('ai-chat-messages');
     appendChatMsg('assistant', question);
-
-    const wrap = document.createElement('div');
-    wrap.className = 'ai-options';
-    options.forEach(opt => {
-        const label = String(opt);
-        const btn = document.createElement('button');
-        btn.className = 'ai-option-btn';
-        btn.innerHTML = `<i class="ph ph-circle-dashed"></i><span>${escapeHTML(label)}</span>`;
-        btn.addEventListener('click', () => {
-            if (!currentOptionBlock) return;
-            appendChatMsg('user', label);
-            lockOptionBlock(label);
-            onPick(label);
-        });
-        wrap.appendChild(btn);
-    });
-    box.appendChild(wrap);
-    currentOptionBlock = wrap;
+    box.appendChild(buildOptionButtons(options));
     box.scrollTop = box.scrollHeight;
 }
 
-/** Seçenek butonlarını kilitler, seçileni vurgular */
-function lockOptionBlock(chosen) {
-    if (!currentOptionBlock) return;
-    currentOptionBlock.querySelectorAll('.ai-option-btn').forEach(b => {
-        b.disabled = true;
-        const label = b.querySelector('span')?.textContent;
-        if (label === chosen) {
-            b.classList.add('chosen');
-            const ic = b.querySelector('i');
-            if (ic) ic.className = 'ph ph-check-circle';
-        } else {
-            b.classList.add('dimmed');
-        }
+/**
+ * Bekleyen soruyu cevaplar (buton ya da yazılan metin, panel ya da ana ekran).
+ * Kilitlenmemiş tüm seçenek blokları yalnızca bekleyen soruya aittir.
+ */
+function answerPendingOption(label) {
+    const resolve = pendingOptionResolve;
+    if (!resolve) return;
+    appendChatMsg('user', label);
+    document.querySelectorAll('.ai-options:not(.locked)').forEach(block => {
+        block.classList.add('locked');
+        block.querySelectorAll('.ai-option-btn').forEach(b => {
+            b.disabled = true;
+            const chosen = b.querySelector('span')?.textContent === label;
+            b.classList.add(chosen ? 'chosen' : 'dimmed');
+            if (chosen) b.querySelector('i').className = 'ph ph-check-circle';
+        });
     });
-    currentOptionBlock = null;
+    resolve(label);
 }
 
 /** Metni panoya kopyalar */
@@ -797,12 +1073,17 @@ function hideTypingDots() {
 
 /** Gönder butonunu işlem durumuna göre günceller */
 function setSendButtonState(busy) {
+    const spin = '<i class="ph ph-circle-notch ai-spin" aria-hidden="true"></i>';
     const btn = document.getElementById('ai-send-btn');
-    if (!btn) return;
-    btn.disabled = busy;
-    btn.innerHTML = busy
-        ? '<i class="ph ph-circle-notch ai-spin"></i>'
-        : '<i class="ph ph-paper-plane-tilt"></i>';
+    if (btn) {
+        btn.disabled = busy;
+        btn.innerHTML = busy ? spin : '<i class="ph ph-paper-plane-tilt" aria-hidden="true"></i>';
+    }
+    const homeBtn = document.getElementById('home-ai-send');
+    if (homeBtn) {
+        homeBtn.disabled = busy;
+        homeBtn.innerHTML = busy ? spin : '<i class="ph ph-arrow-up" aria-hidden="true"></i>';
+    }
 }
 
 function removeSuggestions() {
@@ -915,10 +1196,7 @@ function handleAISend() {
     if (pendingOptionResolve) {
         input.value = '';
         input.style.height = 'auto';
-        const resolver = pendingOptionResolve;
-        appendChatMsg('user', msg);
-        lockOptionBlock(msg);
-        resolver(msg);
+        answerPendingOption(msg);
         return;
     }
 
@@ -929,11 +1207,130 @@ function handleAISend() {
 }
 
 // ==========================================
+// Ana Ekran Komut Çubuğu
+// — sohbet akışını (sendMessageToAI) paylaşır; son etkileşimi
+//   çubuğun altındaki sonuç şeridinde özetler
+// ==========================================
+
+function homeResultBox() {
+    return document.getElementById('home-ai-result');
+}
+
+/** Şerit ve öneri çipleri aynı yeri paylaşır */
+function homeResultShow(show) {
+    homeResultBox()?.classList.toggle('d-none', !show);
+    document.getElementById('home-ai-chips')?.classList.toggle('d-none', show);
+}
+
+function homeResultStart(query) {
+    const box = homeResultBox();
+    if (!box) return;
+    box.innerHTML = `
+        <p class="har-query"><i class="ph ph-chat-circle-dots" aria-hidden="true"></i><span>${escapeHTML(query)}</span></p>
+        <p class="har-status"><i class="ph ph-circle-notch ai-spin" aria-hidden="true"></i>Asistan çalışıyor…</p>`;
+    homeResultShow(true);
+}
+
+/** Durum satırının üstüne ekler — "çalışıyor…" hep en altta kalır */
+function homeResultAppend(el) {
+    const box = homeResultBox();
+    if (!box) return;
+    const status = box.querySelector('.har-status');
+    if (status) box.insertBefore(el, status);
+    else box.appendChild(el);
+}
+
+function homeResultBusy(on) {
+    homeResultBox()?.querySelector('.har-status')?.classList.toggle('d-none', !on);
+}
+
+function homeResultAsk(question, options) {
+    const q = document.createElement('p');
+    q.className = 'har-question';
+    q.textContent = question;
+    homeResultAppend(q);
+    homeResultAppend(buildOptionButtons(options));
+    homeResultBusy(false);
+}
+
+/** Son yanıt ya da hata + "Sohbete devam et" / kapat */
+function homeResultFinish(text, isError) {
+    const box = homeResultBox();
+    if (!box) return;
+    box.querySelector('.har-status')?.remove();
+
+    const reply = document.createElement('div');
+    reply.className = isError ? 'har-reply har-error' : 'har-reply';
+    reply.innerHTML = formatMessage(text);
+    box.appendChild(reply);
+
+    const actions = document.createElement('div');
+    actions.className = 'har-actions';
+    actions.innerHTML = `
+        <button type="button" class="har-continue"><i class="ph ph-chats-circle" aria-hidden="true"></i>Sohbete devam et</button>
+        <button type="button" class="har-close" aria-label="Sonucu kapat"><i class="ph ph-x" aria-hidden="true"></i></button>`;
+    actions.querySelector('.har-continue').addEventListener('click', openAIPanel);
+    actions.querySelector('.har-close').addEventListener('click', () => homeResultShow(false));
+    box.appendChild(actions);
+}
+
+function openAIPanel() {
+    if (!document.getElementById('ai-chat-panel').classList.contains('open')) toggleAIPanel();
+}
+
+/** Ana ekrandan gelen metni işler; metin kullanıldıysa true döner (giriş temizlenir) */
+function homeAsk(text) {
+    if (pendingOptionResolve) {
+        answerPendingOption(text);
+        return true;
+    }
+    if (aiIsProcessing) return false;
+    if (!hasApiKey()) {
+        // Mobilde anahtar yok: panel anahtar istemini gösterir, metin kutuda kalır
+        renderKeyPrompt();
+        openAIPanel();
+        return false;
+    }
+    sendMessageToAI(text);
+    return true;
+}
+
+function renderHomeChips() {
+    const wrap = document.getElementById('home-ai-chips');
+    if (!wrap) return;
+    AI_SUGGESTIONS.forEach(text => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'ai-chip';
+        chip.textContent = text;
+        chip.addEventListener('click', () => homeAsk(text));
+        wrap.appendChild(chip);
+    });
+}
+
+// ==========================================
 // Init
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     sessionsLoad();
     historyPanelInject();
+    updateModelLabel();
+    renderHomeChips();
+
+    // Ana ekran komut çubuğu
+    document.getElementById('home-ai-form')?.addEventListener('submit', e => {
+        e.preventDefault();
+        const input = document.getElementById('home-ai-input');
+        const msg = input.value.trim();
+        if (msg && homeAsk(msg)) input.value = '';
+    });
+
+    // Ayarlar → model arama
+    let modelSearchTimer = null;
+    document.getElementById('settings-model-search')?.addEventListener('input', () => {
+        clearTimeout(modelSearchTimer);
+        modelSearchTimer = setTimeout(renderModelPicker, 150);
+    });
 
     // Toggle panel (masaüstü butonu)
     document.getElementById('ai-chat-toggle')?.addEventListener('click', toggleAIPanel);
