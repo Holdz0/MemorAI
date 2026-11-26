@@ -1596,12 +1596,12 @@ function handleBackButton() {
         window.Capacitor?.Plugins?.App?.exitApp();
     } else {
         lastBackPress = now;
-        showExitToast();
+        showToast('Çıkmak için tekrar geri tuşuna bas');
     }
 }
 
-/** "Çıkmak için tekrar bas" bildirimi */
-function showExitToast() {
+/** Ekranın altında kısa bir bildirim gösterir */
+function showToast(message) {
     let t = document.getElementById('app-toast');
     if (!t) {
         t = document.createElement('div');
@@ -1609,7 +1609,7 @@ function showExitToast() {
         t.className = 'app-toast';
         document.body.appendChild(t);
     }
-    t.textContent = 'Çıkmak için tekrar geri tuşuna bas';
+    t.textContent = message;
     t.classList.add('visible');
     clearTimeout(t._timer);
     t._timer = setTimeout(() => t.classList.remove('visible'), 2000);

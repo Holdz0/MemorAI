@@ -444,6 +444,24 @@
                 </div>
                 <div class="settings-group">
                     <div class="settings-group-title">
+                        <i class="ph ph-database"></i> Veri
+                    </div>
+                    <div class="settings-btn-row">
+                        <button class="ai-settings-btn" id="settings-export">
+                            <i class="ph ph-download-simple"></i> Dışa Aktar
+                        </button>
+                        <button class="ai-settings-btn" id="settings-import">
+                            <i class="ph ph-upload-simple"></i> İçe Aktar
+                        </button>
+                    </div>
+                    <input type="file" id="settings-import-file" accept=".json,application/json" hidden>
+                    <p class="settings-hint">
+                        Görevler, notlar ve geçmiş tek bir JSON dosyasına yedeklenir.
+                        İçe aktarma mevcut verinin yerine geçer.
+                    </p>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-group-title">
                         <i class="ph ph-info"></i> Uygulama
                     </div>
                     <div class="settings-row">
@@ -575,6 +593,7 @@
 
     <!-- Custom JS -->
     <script src="js/app.js"></script>
+    <script src="js/backup.js"></script>
     <script src="js/ai.js"></script>
 </body>
 </html>
