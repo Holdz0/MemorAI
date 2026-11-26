@@ -15,6 +15,27 @@ Doğal dille konuş, AI senin için planlasın.
 
 ---
 
+## 🎯 Problem ve Hedef Kullanıcı
+
+Öğrenciler ve yoğun çalışanlar görevlerini, notlarını ve hatırlatıcılarını çoğu zaman ayrı uygulamalara dağıtıyor. Yeni bir iş eklemek bile form doldurmayı gerektirdiği için kayıtlar eksik kalıyor ve işler unutuluyor. **MemorAI** bu üçünü tek bir yerde topluyor ve *"yarın 15:00'te diş doktoru"* gibi doğal dille yazılan bir isteği tarihli, hatırlatıcılı bir göreve çeviriyor.
+
+**Kimin için:** Dersini, işini ve kişisel işlerini tek bir telefon ya da tarayıcıdan yönetmek isteyen **üniversite öğrencileri ve genç çalışanlar**.
+
+## 📌 Proje Panosu
+
+İş takibi GitHub Projects üzerinde yapılıyor → **[MemorAI — DevOps Panosu](https://github.com/users/Holdz0/projects/2)**
+
+Sütunlar: **Yapılacak → Devam Ediyor → Tamamlandı**. Her kart bir issue; kısa açıklama ve kabul kriterleri kartın içinde, ilgili pull request kartın altında bağlı.
+
+Bu çalışmada geliştirilen iki görev:
+
+| Görev | Pull Request |
+|-------|--------------|
+| [#1 Açık/koyu tema seçimi](https://github.com/Holdz0/MemorAI/issues/1) | [#7](https://github.com/Holdz0/MemorAI/pull/7) |
+| [#2 JSON yedek: dışa/içe aktarma](https://github.com/Holdz0/MemorAI/issues/2) | [#8](https://github.com/Holdz0/MemorAI/pull/8) |
+
+---
+
 ## ✨ Özellikler
 
 ### 📋 Görev Yönetimi
@@ -46,6 +67,10 @@ Doğal dille konuş, AI senin için planlasın.
 - Tarih aralığı filtreleme
 - Tamamlanmadan silinenler kaydedilmez
 
+### ⚙️ Görünüm ve Veri
+- **Açık / Koyu / Sistem** teması — seçim hatırlanır
+- **JSON yedek** — görevler, notlar ve geçmiş tek dosyaya dışa aktarılır, başka cihazda içe aktarılır
+
 ### 📱 Mobil-First Tasarım
 - **App-shell layout** — sadece görev listesi kayar, üst başlık/filtreler pinli
 - Bottom-sheet modallar (görev ekle, detay)
@@ -68,22 +93,42 @@ Doğal dille konuş, AI senin için planlasın.
 
 ---
 
-## 🚀 Kurulum (Web)
+## 🚀 Çalıştırma (Web)
 
-**Gereksinim:** Node.js 20.12+ (`.env` dosyası yerleşik olarak yüklenir)
+**Gereksinim:** [Node.js](https://nodejs.org/) 20.12+
 
 ```bash
 git clone https://github.com/Holdz0/MemorAI.git
 cd MemorAI
 npm install
-cp .env.example .env
-# .env içine OpenRouter API anahtarını yaz
 npm start
 ```
 
-→ `http://localhost:3000`
+→ Tarayıcıda **http://localhost:3000** adresini aç.
 
-API anahtarı: [openrouter.ai/keys](https://openrouter.ai/keys) (ücretsiz)
+> **API anahtarı isteğe bağlıdır.** Anahtar olmadan görevler, notlar, tema ve yedek özellikleri tam çalışır; yalnızca AI asistanı yanıt vermez. Asistanı da denemek için `.env.example` dosyasını `.env` adıyla kopyala, içine [OpenRouter anahtarını](https://openrouter.ai/keys) (ücretsiz) yaz ve sunucuyu yeniden başlat.
+
+**Testler:** `npm test`
+
+---
+
+## 🧪 Geliştirilen Özellikleri Deneme
+
+### 1) Açık / Koyu Tema — [#1](https://github.com/Holdz0/MemorAI/issues/1) · [PR #7](https://github.com/Holdz0/MemorAI/pull/7)
+
+1. Sağ üstteki ⚙️ **Ayarlar** ikonuna tıkla.
+2. **Görünüm** bölümünde **Açık**'ı seç → ana ekran, pencereler ve ayarlar anında açık renge geçer.
+3. Sayfayı yenile (F5) → seçim korunur, açılışta koyu ekran yanıp sönmez.
+4. **Sistem**'i seç → uygulama işletim sisteminin temasını izler (Windows: *Ayarlar → Kişiselleştirme → Renkler → Modunuzu seçin*).
+
+### 2) JSON Yedek — [#2](https://github.com/Holdz0/MemorAI/issues/2) · [PR #8](https://github.com/Holdz0/MemorAI/pull/8)
+
+1. **+ Yeni görev** ile birkaç görev, **Notlar** sekmesinden bir not ekle.
+2. ⚙️ **Ayarlar → Veri → Dışa Aktar** → `memorai-yedek-YYYY-MM-DD.json` dosyası iner.
+3. Aynı adresi gizli pencerede aç (Ctrl+Shift+N) → liste boştur.
+4. Orada **Ayarlar → Veri → İçe Aktar** → indirdiğin dosyayı seç → onayla → görevler ve notlar geri gelir.
+5. **Bozuk dosya:** İçe Aktar ile projedeki `package.json`'ı seç → *"Geçersiz yedek dosyası — mevcut veri korundu"* mesajı çıkar, veriler değişmez.
+6. Doğrulama mantığının otomatik testleri: `npm test`
 
 ---
 
@@ -121,8 +166,10 @@ MemorAI/
 │   ├── index.html
 │   ├── css/style.css
 │   └── js/
-│       ├── app.js             # Görev/not yönetimi, modallar, geri tuşu
+│       ├── app.js             # Görev/not yönetimi, modallar, tema, geri tuşu
+│       ├── backup.js          # JSON yedek: dışa/içe aktarma
 │       └── ai.js              # AI asistan + OpenRouter
+├── test/                      # node:test birim testleri (npm test)
 ├── android/                   # Capacitor Android projesi
 ├── server.js                  # Web: Express + /api/chat ve /api/models proxy
 ├── capacitor.config.json
@@ -143,11 +190,14 @@ MemorAI/
 
 ## 📋 Roadmap
 
-- [ ] Tema seçimi (açık / koyu)
-- [ ] Dışa/içe aktarma (JSON yedek)
+Güncel durum için [proje panosuna](https://github.com/users/Holdz0/projects/2) bak.
+
+- [x] Tema seçimi (açık / koyu)
+- [x] Dışa/içe aktarma (JSON yedek)
 - [ ] PWA desteği (web sürümü için)
-- [ ] iOS APK desteği
+- [ ] GitHub Actions ile CI
 - [ ] Çoklu dil desteği
+- [ ] iOS desteği
 
 ---
 
